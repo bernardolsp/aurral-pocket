@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { MiniPlayer } from "@/components/player/MiniPlayer";
 import { HAS_LIQUID_GLASS } from "@/constants/navigation";
 import { IS_IOS } from "@/constants/platform";
+import { useHasTvQueue } from "@/lib/player/tv-output";
 import { useHasQueue } from "@/lib/player/player";
 import { useColors } from "@/hooks/use-colors";
 
@@ -34,7 +35,9 @@ export function MiniPlayerHost({ children, aboveTabs }: HostProps) {
 
 function DockedHost({ children, aboveTabs }: HostProps) {
   const insets = useSafeAreaInsets();
-  const hasQueue = useHasQueue();
+  const localQueue = useHasQueue();
+  const tvQueue = useHasTvQueue();
+  const hasQueue = localQueue || tvQueue;
 
   // Android's tab content area ends at the top of the tab bar, so the dock
   // sits at the content's bottom edge. Above the tabs, the content runs down

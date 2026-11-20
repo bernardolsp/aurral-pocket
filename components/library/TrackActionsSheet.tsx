@@ -15,6 +15,7 @@ import {
   useToggleFavorite,
 } from "@/hooks/library/use-library-favorites";
 import type { TrackFavorite } from "@/lib/api/library";
+import { useTvSelected } from "@/lib/player/tv-output";
 import { useQueueActions } from "@/hooks/library/use-queue-actions";
 import { useSongSave } from "@/hooks/offline/use-song-save";
 import { useLibraryTrackDetails } from "@/hooks/player/use-library-track-details";
@@ -146,6 +147,7 @@ function TrackActionsContent({
   const insets = useSafeAreaInsets();
   const sheetRef = useRef<BottomSheetModal>(null);
   const queue = useQueueActions();
+  const tvSelected = useTvSelected();
   const songSave = useSongSave();
   const startRadio = useStartRadio();
   const options: ItemOptions = "item" in target ? target : {};
@@ -258,12 +260,12 @@ function TrackActionsContent({
           <>
             <SheetAction
               icon="play-forward-outline"
-              label="Play Next"
+              label={tvSelected ? "Play Next on TV" : "Play Next"}
               onPress={closeThen(() => void playNext())}
             />
             <SheetAction
               icon="list-outline"
-              label="Add to Queue"
+              label={tvSelected ? "Add to TV Queue" : "Add to Queue"}
               onPress={closeThen(() => void addToQueue())}
             />
             {startTrackRadio && (

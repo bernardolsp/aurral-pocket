@@ -61,6 +61,7 @@ import { useToggleFavorite } from "@/hooks/library/use-library-favorites";
 import { useLibraryTracks } from "@/hooks/library/use-library-tracks";
 import { useSaveOffline } from "@/hooks/offline/use-save-offline";
 import { usePlayTrack } from "@/hooks/library/use-play-track";
+import { useTvSelected } from "@/lib/player/tv-output";
 import { useQueueActions } from "@/hooks/library/use-queue-actions";
 import { useCoverTint } from "@/hooks/player/use-cover-color";
 import { usePluginActions } from "@/hooks/plugins/use-plugin-actions";
@@ -201,6 +202,7 @@ export function AlbumDetailScreen() {
   };
 
   const play = usePlayTrack();
+  const tvSelected = useTvSelected();
   const { playNext, addToQueue, playAlbum, shuffleAlbum } = useQueueActions();
   const startRadio = useStartRadio();
   const pluginActions = usePluginActions(
@@ -543,13 +545,13 @@ export function AlbumDetailScreen() {
             }
             onPress={() => void playNext(albumTracks, playContext)}
           >
-            Play Next
+            {tvSelected ? "Play Next on TV" : "Play Next"}
           </Stack.Toolbar.MenuAction>
           <Stack.Toolbar.MenuAction
             icon={IS_IOS ? "text.badge.plus" : QueueMusic}
             onPress={() => void addToQueue(albumTracks, playContext)}
           >
-            Add to Queue
+            {tvSelected ? "Add to TV Queue" : "Add to Queue"}
           </Stack.Toolbar.MenuAction>
           <Stack.Toolbar.MenuAction
             icon={IS_IOS ? "dot.radiowaves.left.and.right" : Sensors}

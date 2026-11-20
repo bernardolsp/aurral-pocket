@@ -1,3 +1,5 @@
+import { lazy, Suspense, useState } from "react";
+import { selectTvOutput, useTvOutput } from "@/lib/player/tv-output";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { Pressable, StyleSheet, View } from "react-native";
@@ -13,6 +15,12 @@ import {
 } from "@/lib/player/player";
 import { useColors } from "@/hooks/use-colors";
 
+const TvQueueScreen = lazy(() =>
+  import("./TvQueueScreen").then(({ TvQueueScreen }) => ({
+    default: TvQueueScreen,
+  })),
+);
+
 type MiniPlayerProps = {
   /** Artwork and play/pause only, for the accessory's narrow inline slot. */
   compact?: boolean;
@@ -25,6 +33,71 @@ type MiniPlayerProps = {
  * reads progress, so a tick cannot re-render it.
  */
 export function MiniPlayer({ compact = false }: MiniPlayerProps) {
+  const tv = useTvOutput();
+  const [tvOpen, setTvOpen] = useState(false);
+  const localState = usePlaybackState();
+  const colors = useColors();
+  // Joining is explicit. A TV in another room must not silently redirect library actions.
+  const tvTrack = tv.status?.entries[tv.status.index];
+  const showTv =
+    tvTrack &&
+    (tv.selected || (localState !== "playing" && localState !== "buffering"));
+  function openTv() {
+    if (tv.remote && tv.status) selectTvOutput(tv.remote, tv.status);
+    setTvOpen(true);
+  }
+  return (
+    <>
+      {showTv ? (
+        <Pressable
+          onPress={openTv}
+          accessibilityRole="button"
+          accessibilityLabel={`${tvTrack.title}. Open the TV queue.`}
+          style={styles.row}
+        >
+          <Ionicons
+            name="tv-outline"
+            size={compact ? 24 : 30}
+            color={colors.brand}
+          />
+          {!compact && (
+            <View style={styles.meta}>
+              <Text variant="body" numberOfLines={1} style={Fonts.medium}>
+                {tvTrack.title}
+              </Text>
+              <Text variant="caption" numberOfLines={1}>
+                {!tv.reachable
+                  ? "TV disconnected"
+                  : tv.status?.playing
+                    ? "Playing on Aurral TV"
+                    : "Paused on Aurral TV"}
+              </Text>
+            </View>
+          )}
+          <Ionicons name="list" size={20} color={colors.text} />
+        </Pressable>
+      ) : (
+        <LocalMiniPlayer
+          compact={compact}
+          openTv={tvTrack ? openTv : undefined}
+        />
+      )}
+      {tvOpen && (
+        <Suspense fallback={null}>
+          <TvQueueScreen onClose={() => setTvOpen(false)} />
+        </Suspense>
+      )}
+    </>
+  );
+}
+
+function LocalMiniPlayer({
+  compact,
+  openTv,
+}: {
+  compact: boolean;
+  openTv?: () => void;
+}) {
   const colors = useColors();
   const router = useRouter();
   const track = useCurrentTrack();
@@ -62,6 +135,17 @@ export function MiniPlayer({ compact = false }: MiniPlayerProps) {
             {track.artist}
           </Text>
         </View>
+      )}
+      {openTv && !compact && (
+        <Pressable
+          onPress={openTv}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="Join TV queue"
+          style={styles.control}
+        >
+          <Ionicons name="tv-outline" size={22} color={colors.text} />
+        </Pressable>
       )}
       <Pressable
         onPress={() => togglePlayback()}

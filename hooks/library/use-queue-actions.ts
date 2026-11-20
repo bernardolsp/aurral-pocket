@@ -11,7 +11,13 @@ import {
 import { toastNotSaved } from "@/hooks/offline/toast-not-saved";
 import { isOffline } from "@/lib/offline/network";
 import { canPlayNow } from "@/lib/offline/saved-library";
-import type { PlayerAlbumContext, PlayerTrack } from "@/lib/player/track-item";
+import { enqueueOnTv } from "@/lib/tv/remote";
+import { getTvOutput } from "@/lib/player/tv-output";
+import {
+  toPlayerTrack,
+  type PlayerAlbumContext,
+  type PlayerTrack,
+} from "@/lib/player/track-item";
 import type { Track } from "@/lib/types/library";
 
 /**
@@ -22,25 +28,41 @@ import type { Track } from "@/lib/types/library";
 export function useQueueActions() {
   const playNext = useCallback(
     (tracks: Track[], album: PlayerAlbumContext) =>
-      confirmQueued(playNextInQueue(tracks, album), "Playing next"),
+      queueEdit(
+        "next",
+        () => albumItems(tracks, album),
+        () => playNextInQueue(tracks, album),
+      ),
     [],
   );
 
   const addLast = useCallback(
     (tracks: Track[], album: PlayerAlbumContext) =>
-      confirmQueued(addToQueue(tracks, album), "Added to queue"),
+      queueEdit(
+        "end",
+        () => albumItems(tracks, album),
+        () => addToQueue(tracks, album),
+      ),
     [],
   );
 
   const playNextItems = useCallback(
     (items: PlayerTrack[], album: PlayerAlbumContext) =>
-      confirmQueued(playItemsNext(items, album), "Playing next"),
+      queueEdit(
+        "next",
+        () => items,
+        () => playItemsNext(items, album),
+      ),
     [],
   );
 
   const addItemsLast = useCallback(
     (items: PlayerTrack[], album: PlayerAlbumContext) =>
-      confirmQueued(addItemsToQueue(items, album), "Added to queue"),
+      queueEdit(
+        "end",
+        () => items,
+        () => addItemsToQueue(items, album),
+      ),
     [],
   );
 
@@ -90,6 +112,36 @@ export function useQueueActions() {
     playAlbum,
     shuffleAlbum,
   };
+}
+
+function albumItems(tracks: Track[], album: PlayerAlbumContext) {
+  return tracks
+    .map((track) => toPlayerTrack(track, album))
+    .filter((item) => item !== null);
+}
+
+async function queueEdit(
+  placement: "next" | "end",
+  items: () => PlayerTrack[],
+  local: () => Promise<number>,
+) {
+  const { selected, remote, status } = getTvOutput();
+  if (!selected)
+    return confirmQueued(
+      local(),
+      placement === "next" ? "Playing next" : "Added to queue",
+    );
+  try {
+    if (!remote || !status?.sessionId)
+      throw new Error("Open the TV queue and reconnect.");
+    await enqueueOnTv(remote, items(), placement, status.sessionId);
+    Burnt.toast({
+      title: placement === "next" ? "Playing next on TV" : "Added to TV queue",
+      preset: "done",
+    });
+  } catch (error) {
+    toastFailure(error);
+  }
 }
 
 async function confirmQueued(edit: Promise<number>, done: string) {

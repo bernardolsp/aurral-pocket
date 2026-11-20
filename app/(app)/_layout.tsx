@@ -11,6 +11,7 @@ import { useLiveSocketFollowsSession } from "@/hooks/live/use-live-socket-follow
 import { useSavedLibraryFollowsSession } from "@/hooks/offline/use-saved-library-follows-session";
 import { usePluginActionResults } from "@/hooks/plugins/use-plugin-actions";
 import { useQueueFollowsSession } from "@/hooks/player/use-queue-follows-session";
+import { useTvSession } from "@/hooks/player/use-tv-session";
 import { useQueueSync } from "@/hooks/player/use-queue-sync";
 import { useSiriVocabulary } from "@/hooks/siri/use-siri-vocabulary";
 import { startPlayHistory } from "@/lib/player/play-history";
@@ -34,6 +35,7 @@ export default function AppLayout() {
 
   useQueueFollowsSession();
   useQueueSync();
+  useTvSession();
   useSavedLibraryFollowsSession();
   useLiveSocketFollowsSession();
   usePluginActionResults();

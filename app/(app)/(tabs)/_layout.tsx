@@ -6,6 +6,7 @@ import { Colors, Fonts } from "@/constants/theme";
 import { useAuth } from "@/contexts/auth-context";
 import { useHasPermission } from "@/hooks/auth/use-has-permission";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { useHasTvQueue } from "@/lib/player/tv-output";
 import { useHasQueue } from "@/lib/player/player";
 import { NativeTabs } from "expo-router/native-tabs";
 
@@ -14,7 +15,9 @@ export default function TabsLayout() {
   const hasPermission = useHasPermission();
   const colorScheme = useColorScheme() ?? "light";
   const colors = Colors[colorScheme];
-  const hasQueue = useHasQueue();
+  const localQueue = useHasQueue();
+  const tvQueue = useHasTvQueue();
+  const hasQueue = localQueue || tvQueue;
 
   // The tab set must be final on first render. A trigger whose `hidden` flag
   // flips after mount rebuilds the native tab bar, and on Android that

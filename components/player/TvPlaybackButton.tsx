@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { BottomSheetModal, BottomSheetScrollView } from "@gorhom/bottom-sheet";
@@ -15,9 +15,22 @@ import {
   pause,
 } from "@/lib/player/player";
 import type { PlayerTrack } from "@/lib/player/track-item";
-import { controlTv, getTvRemote, playQueueOnTv } from "@/lib/tv/remote";
+import { selectTvOutput } from "@/lib/player/tv-output";
+import {
+  controlTv,
+  getTvRemote,
+  playQueueOnTv,
+  readTvSnapshot,
+} from "@/lib/tv/remote";
+
+const TvQueueScreen = lazy(() =>
+  import("./TvQueueScreen").then(({ TvQueueScreen }) => ({
+    default: TvQueueScreen,
+  })),
+);
 
 type Source =
+  | { kind: "tv"; title: string }
   | { kind: "current"; title: string }
   | {
       kind: "collection";
@@ -69,14 +82,40 @@ export function TvPlaybackButton({
   );
 }
 
-function TvPlaybackSheet({
+export function TvPlaybackSheet({
   source,
   onClose,
 }: {
   source: Source;
   onClose: () => void;
 }) {
+  const [showQueue, setShowQueue] = useState(false);
+  if (source.kind === "tv" || showQueue) {
+    return (
+      <Suspense fallback={null}>
+        <TvQueueScreen onClose={onClose} />
+      </Suspense>
+    );
+  }
+  return (
+    <SourceSheet
+      source={source}
+      onClose={onClose}
+      onQueue={() => setShowQueue(true)}
+    />
+  );
+}
+function SourceSheet({
+  source,
+  onClose,
+  onQueue,
+}: {
+  onQueue: () => void;
+  source: Exclude<Source, { kind: "tv" }>;
+  onClose: () => void;
+}) {
   const sheet = useRef<BottomSheetModal>(null);
+  const openingQueue = useRef(false);
   const [handoffPending, setHandoffPending] = useState(false);
   const { serverUrl, user, token } = useAuth();
   useEffect(() => {
@@ -89,7 +128,7 @@ function TvPlaybackSheet({
       enablePanDownToClose={!handoffPending}
       backdropPressBehavior={handoffPending ? "none" : "close"}
       background="card"
-      onDismiss={onClose}
+      onDismiss={() => (openingQueue.current ? onQueue() : onClose())}
     >
       <BottomSheetScrollView contentContainerStyle={styles.sheet}>
         <Text accessibilityRole="header" variant="title">
@@ -102,6 +141,10 @@ function TvPlaybackSheet({
             serverUrl={serverUrl}
             userId={user.id}
             setHandoffPending={setHandoffPending}
+            onQueue={() => {
+              openingQueue.current = true;
+              sheet.current?.dismiss();
+            }}
           />
         ) : (
           <Text>Sign in to Pocket to use the TV paired with your account.</Text>
@@ -125,9 +168,11 @@ function TvControls({
   serverUrl,
   userId,
   setHandoffPending,
+  onQueue,
 }: {
+  onQueue: () => void;
   setHandoffPending: (value: boolean) => void;
-  source: Source;
+  source: Exclude<Source, { kind: "tv" }>;
   serverUrl: string;
   userId: number;
 }) {
@@ -223,7 +268,18 @@ function TvControls({
           }
         }
       }
-      if (active.current) setConnection({ state: "ready", remote, status });
+      if (active.current) {
+        setConnection({ state: "ready", remote, status });
+        if (action === "play" && status.playing) {
+          try {
+            const snapshot = await readTvSnapshot(remote);
+            if (active.current && snapshot.sessionId)
+              selectTvOutput(remote, snapshot);
+          } catch {
+            /* Older TV builds still support basic transport controls. */
+          }
+        }
+      }
     } catch (error) {
       if (active.current)
         setMessage(
@@ -329,6 +385,15 @@ function TvControls({
             </Pressable>
           ))}
         </View>
+      )}
+      {!!status.title && (
+        <Button
+          title="Open TV queue"
+          variant="inline"
+          accessibilityRole="button"
+          onPress={onQueue}
+          disabled={working}
+        />
       )}
       <Button
         title={source.title ? `Play “${source.title}” on TV` : "Play on TV"}
