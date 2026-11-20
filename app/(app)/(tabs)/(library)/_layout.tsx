@@ -94,6 +94,13 @@ export default function LibraryLayout() {
           }}
         />
         <Stack.Screen name="playlist/[id]" options={DETAIL_SCREEN_OPTIONS} />
+        <Stack.Screen
+          name="playlist-builder"
+          options={{
+            title: "Playlist Builder",
+            headerBackButtonDisplayMode: "minimal",
+          }}
+        />
         <Stack.Screen name="flow/[id]" options={DETAIL_SCREEN_OPTIONS} />
         <Stack.Screen
           name="playlist-edit"

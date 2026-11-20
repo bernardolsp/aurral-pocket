@@ -19,6 +19,7 @@ import {
 import { IS_ANDROID, IS_IOS } from "@/constants/platform";
 import { OverflowMenu } from "@/components/navigation/OverflowMenu";
 import type { Flow } from "@/lib/types/flow";
+import { useServerFeatures } from "@/hooks/auth/use-server-features";
 import { usePullToRefresh } from "@/hooks/use-pull-to-refresh";
 import { useColors } from "@/hooks/use-colors";
 
@@ -41,6 +42,7 @@ function FlowScreenContent() {
   const router = useRouter();
   const { data, refetch } = useFlowStatusSuspense();
   const setEnabled = useSetFlowEnabled();
+  const builderAvailable = useServerFeatures().includes("playlistBuilder");
 
   const { refreshing, onRefresh } = usePullToRefresh(
     refetch,
@@ -96,9 +98,21 @@ function FlowScreenContent() {
         </Stack.Toolbar.Button>
         <Stack.Toolbar.Menu
           icon={IS_IOS ? "plus" : Add}
-          accessibilityLabel="Create flow"
+          accessibilityLabel={
+            builderAvailable ? "Create flow or playlist" : "Create flow"
+          }
           disabled={createFromTemplate.isPending}
         >
+          {builderAvailable && (
+            <Stack.Toolbar.MenuAction
+              icon={IS_IOS ? "music.note.list" : GraphicEq}
+              onPress={() =>
+                router.push("/(app)/(tabs)/(flow)/playlist-builder")
+              }
+            >
+              Playlist Builder
+            </Stack.Toolbar.MenuAction>
+          )}
           <Stack.Toolbar.MenuAction
             icon={IS_IOS ? "slider.horizontal.3" : Tune}
             onPress={openCreateFlow}

@@ -19,6 +19,13 @@ export default function FlowLayout() {
             headerLargeTitleEnabled: true,
           }}
         />
+        <Stack.Screen
+          name="playlist-builder"
+          options={{
+            title: "Playlist Builder",
+            headerBackButtonDisplayMode: "minimal",
+          }}
+        />
         <Stack.Screen name="flow/[id]" options={DETAIL_SCREEN_OPTIONS} />
         <Stack.Screen
           name="flow-edit"

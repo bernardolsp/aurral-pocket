@@ -1,3 +1,6 @@
+import Add from "@expo/material-symbols/add.xml";
+import { IS_IOS } from "@/constants/platform";
+import { useServerFeatures } from "@/hooks/auth/use-server-features";
 import { useCallback, useMemo, useState } from "react";
 import { RefreshControl, StyleSheet, View } from "react-native";
 import { FlashList } from "@shopify/flash-list";
@@ -31,6 +34,7 @@ function LibraryPlaylistsContent() {
   const router = useRouter();
   const { data, refetch } = useFlowStatusSuspense();
   const [show, setShow] = useState<Show>("all");
+  const builderAvailable = useServerFeatures().includes("playlistBuilder");
   const savedIds = useSavedIds("playlist");
   const showSaved = show === "saved";
   const playlists = showSaved
@@ -40,6 +44,17 @@ function LibraryPlaylistsContent() {
   const toolbar = useMemo(
     () => (
       <Stack.Toolbar placement="right">
+        {builderAvailable && (
+          <Stack.Toolbar.Button
+            icon={IS_IOS ? "plus" : Add}
+            accessibilityLabel="Playlist Builder"
+            onPress={() =>
+              router.push("/(app)/(tabs)/(library)/playlist-builder")
+            }
+          >
+            Playlist Builder
+          </Stack.Toolbar.Button>
+        )}
         <Stack.Toolbar.Menu
           icon={FILTER_MENU_ICON}
           title="Filters"
@@ -57,7 +72,7 @@ function LibraryPlaylistsContent() {
         </Stack.Toolbar.Menu>
       </Stack.Toolbar>
     ),
-    [show],
+    [show, builderAvailable, router],
   );
 
   const { refreshing, onRefresh } = usePullToRefresh(

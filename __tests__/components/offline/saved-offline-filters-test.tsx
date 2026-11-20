@@ -1,3 +1,6 @@
+jest.mock("@/hooks/auth/use-server-features", () => ({
+  useServerFeatures: () => [],
+}));
 const mockPush = jest.fn();
 jest.mock("expo-router", () => ({
   ...require("@/test-support/expo-router-stack"),

@@ -9,15 +9,16 @@ import { useColors } from "@/hooks/use-colors";
 
 type Props = {
   value: number;
+  min?: number;
   onChange: (value: number) => void;
 };
 
-function clamp(next: number): number {
-  if (!Number.isFinite(next)) return FLOW_SIZE_MIN;
-  return Math.max(FLOW_SIZE_MIN, Math.min(FLOW_SIZE_MAX, Math.round(next)));
+function clamp(next: number, min: number): number {
+  if (!Number.isFinite(next)) return min;
+  return Math.max(min, Math.min(FLOW_SIZE_MAX, Math.round(next)));
 }
 
-export function SizeStepper({ value, onChange }: Props) {
+export function SizeStepper({ value, onChange, min = FLOW_SIZE_MIN }: Props) {
   const colors = useColors();
   const [draft, setDraft] = useState(String(value));
   const [editing, setEditing] = useState(false);
@@ -30,9 +31,9 @@ export function SizeStepper({ value, onChange }: Props) {
   };
 
   const decrement = () => {
-    if (value <= FLOW_SIZE_MIN) return;
+    if (value <= min) return;
     Haptics.selectionAsync();
-    onChange(Math.max(FLOW_SIZE_MIN, value - FLOW_SIZE_STEP));
+    onChange(Math.max(min, value - FLOW_SIZE_STEP));
   };
   const increment = () => {
     if (value >= FLOW_SIZE_MAX) return;
@@ -44,7 +45,7 @@ export function SizeStepper({ value, onChange }: Props) {
     setEditing(false);
     const parsed = Number(draft.replace(/[^0-9]/g, ""));
     if (!Number.isFinite(parsed) || draft.trim() === "") return;
-    const next = clamp(parsed);
+    const next = clamp(parsed, min);
     if (next !== value) onChange(next);
   };
 
@@ -60,10 +61,10 @@ export function SizeStepper({ value, onChange }: Props) {
     >
       <Pressable
         onPress={decrement}
-        disabled={value <= FLOW_SIZE_MIN}
+        disabled={value <= min}
         style={({ pressed }) => [
           styles.button,
-          { opacity: pressed || value <= FLOW_SIZE_MIN ? 0.4 : 1 },
+          { opacity: pressed || value <= min ? 0.4 : 1 },
         ]}
         accessibilityLabel="Decrease size"
       >

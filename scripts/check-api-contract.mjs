@@ -117,6 +117,7 @@ const SYNTHETIC = {
 const REQUIRED_QUERY = new Map([
   ["GET /library", "kind=artists&pageSize=100"],
   ["GET /requests/page", "view=queue"],
+  ["GET /playlists/builder/artists", "source=library&q=Radiohead"],
   ["GET /playlists/containing", "artistName=Radiohead&trackName=Nude"],
 ]);
 
@@ -230,6 +231,7 @@ const CONTRACT = new Map([
   ["POST /library/albums/lookup/batch", null],
   ["POST /library/albums/request", null],
   ["POST /library/downloads/track", null],
+  ["GET /playlists/builder/artists", { artists: "array" }],
   ["POST /playlists/flows", null],
   [
     "GET /playlists/status",
@@ -605,14 +607,13 @@ function readPocketContract() {
 /**
  * Returns true on failure. Runs in both modes.
  *
- * The app never hides a screen over a feature name. This check is how pocket
+ * This check is how pocket
  * learns that Aurral changed what it promises: a new contract version, a
  * feature it dropped, or a feature pocket has not adopted yet. On the advisory
  * run against Aurral `latest`, a failure here lands in the api-drift issue.
  */
-async function checkContractVersion(token) {
+function checkContractVersion({ status, body }) {
   const pocket = readPocketContract();
-  const { status, body } = await request("GET", "/api/health/bootstrap", token);
   const api = body?.api;
   if (status !== 200 || !api) {
     console.error(
@@ -640,7 +641,13 @@ async function checkContractVersion(token) {
     return true;
   }
   const served = new Set(api.features);
-  const dropped = pocket.features.filter((name) => !served.has(name));
+  // Aurral 3.0.0 predates Playlist Builder. Pocket exposes the screen
+  // only on servers that advertise its routes.
+  const dropped = pocket.features.filter(
+    (name) =>
+      !served.has(name) &&
+      !(name === "playlistBuilder" && PINNED_VERSION === "3.0.0"),
+  );
   const unknown = api.features.filter(
     (name) => !pocket.features.includes(name),
   );
@@ -916,7 +923,13 @@ function compareBaseline(shapes) {
   }
 
   let failed = false;
-  const recorded = baseline.shapes ?? {};
+  const recorded = { ...baseline.shapes };
+  // The 3.0.0 image cannot record this optional response. When testing
+  // a server with Builder, check the same envelope an empty Library returns.
+  const builderArtists = "GET /playlists/builder/artists";
+  if (PINNED_VERSION === "3.0.0" && shapes.has(builderArtists)) {
+    recorded[builderArtists] = { artists: [] };
+  }
 
   for (const [key, baseShape] of Object.entries(recorded)) {
     if (!shapes.has(key) && THIRD_PARTY_ROUTES.has(key)) {
@@ -970,8 +983,13 @@ function compareBaseline(shapes) {
 async function main() {
   let token = await login();
   // Before the probes: one of them signs this session out.
-  const contractFailed = await checkContractVersion(token);
-  const extracted = extractPocketRoutes();
+  const bootstrap = await request("GET", "/api/health/bootstrap", token);
+  const contractFailed = checkContractVersion(bootstrap);
+  const builderAvailable =
+    bootstrap.body?.api?.features?.includes("playlistBuilder");
+  const extracted = extractPocketRoutes().filter(
+    (route) => builderAvailable || !route.raw.startsWith("/playlists/builder/"),
+  );
   if (extracted.length === 0) {
     console.error("Extracted no routes from lib/api — the parser is broken.");
     process.exit(1);

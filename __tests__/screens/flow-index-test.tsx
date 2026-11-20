@@ -1,3 +1,6 @@
+jest.mock("@/hooks/auth/use-server-features", () => ({
+  useServerFeatures: jest.fn(() => ["playlistBuilder"]),
+}));
 jest.mock("@/hooks/use-color-scheme", () => ({
   useColorScheme: jest.fn(() => "dark"),
 }));
@@ -108,6 +111,7 @@ import React from "react";
 import { Alert } from "react-native";
 import { fireEvent, render } from "@testing-library/react-native";
 import FlowScreen from "@/app/(app)/(tabs)/(flow)/index";
+import { useServerFeatures } from "@/hooks/auth/use-server-features";
 import { useHasPermission } from "@/hooks/auth/use-has-permission";
 import { useFlowStatusSuspense } from "@/hooks/flow";
 
@@ -214,6 +218,20 @@ describe("FlowScreen list", () => {
 
 describe("FlowScreen new flow menu", () => {
   beforeEach(() => grantPermission(true));
+
+  it("keeps the builder out of the menu when the server lacks it", async () => {
+    jest.mocked(useServerFeatures).mockReturnValueOnce([]);
+    const { queryByText } = await render(<FlowScreen />);
+    expect(queryByText("Playlist Builder")).toBeNull();
+  });
+
+  it("opens Playlist Builder from the create menu", async () => {
+    const { getByText } = await render(<FlowScreen />);
+    await fireEvent.press(getByText("Playlist Builder"));
+    expect(mockPush).toHaveBeenCalledWith(
+      "/(app)/(tabs)/(flow)/playlist-builder",
+    );
+  });
 
   it("opens the custom flow form", async () => {
     const { getByText } = await render(<FlowScreen />);

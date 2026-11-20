@@ -100,6 +100,7 @@ async function open(initialUrl: string) {
       ErrorBoundary: PlaylistErrorBoundary,
     },
     "playlist-edit": OtherRoute,
+    "playlist-builder": OtherRoute,
     // The layout's other screens, so it finds every route it names.
     artists: OtherRoute,
     albums: OtherRoute,
