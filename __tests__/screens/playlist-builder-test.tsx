@@ -119,6 +119,7 @@ it("gates deep links on the server capability", async () => {
 it("previews a seeded mix and queues exactly the named, accepted tracks", async () => {
   await open();
   await chooseMain();
+  expect(screen.queryByLabelText("Online recommendations")).toBeNull();
   expect(mockGet).toHaveBeenCalledWith("/playlists/builder/artists", {
     params: { source: "library", q: "Roots" },
     signal: expect.anything(),
@@ -169,3 +170,189 @@ it("clears artist and seed choices when switching sources", async () => {
     screen.getByRole("checkbox", { name: /You Got Me/ }),
   ).not.toBeChecked();
 });
+
+const discovery = {
+  id: "catalog:9",
+  recordingMbid: "01cec5ee-f93f-4dec-990f-76ada77788b8",
+  source: "discovery",
+  trackName: "The Light",
+  artistName: "Common",
+  albumName: "Like Water for Chocolate",
+};
+
+function enableRecommendations() {
+  (useServerHealth as jest.Mock).mockReturnValue({
+    data: {
+      api: { features: ["playlistBuilder", "playlistBuilderRecommendations"] },
+    },
+  });
+}
+
+async function turnRecommendationsOff() {
+  await fireEvent(
+    screen.getByLabelText("Online recommendations"),
+    "valueChange",
+    false,
+  );
+}
+
+async function pickSeedsAndPreview() {
+  await chooseMain();
+  await fireEvent.press(screen.getByRole("checkbox", { name: /You Got Me/ }));
+  await fireEvent.press(screen.getByRole("button", { name: related.name }));
+  await fireEvent.press(screen.getByText("Preview playlist"));
+  await screen.findByText("Edit mix");
+}
+
+function serveSuggestions(cached: boolean) {
+  mockPost.mockImplementation(async (path: string, recipe) => {
+    if (path.endsWith("/options"))
+      return { data: { tracks: [seed], similarArtists: [related] } };
+    if (path.endsWith("/preview")) {
+      const fromCatalog = recipe.source === "discovery";
+      return {
+        data: {
+          tracks: fromCatalog ? [seed, extra, discovery] : [seed, extra],
+          missingArtists: [],
+          recommendationBasis: "recording",
+          discoveryTeaser:
+            !fromCatalog && (cached || recipe.recommendationMode === "online")
+              ? [discovery]
+              : [],
+        },
+      };
+    }
+    if (path.endsWith("/save"))
+      return { data: { queued: true, playlistId: "p", operationId: "o" } };
+    throw new Error(path);
+  });
+}
+
+it("recommends online by default while saving only the reviewed Library songs", async () => {
+  enableRecommendations();
+  serveSuggestions(false);
+  await open();
+  await pickSeedsAndPreview();
+  expect(mockPost).toHaveBeenCalledWith("/playlists/builder/preview", {
+    source: "library",
+    recommendationMode: "online",
+    artist: main,
+    seedTrackIds: [seed.id],
+    similarArtists: [related],
+    size: 20,
+  });
+  expect(screen.getByText(discovery.trackName)).toBeTruthy();
+  expect(screen.getByText("Based on your seed songs.")).toBeTruthy();
+  await fireEvent.press(screen.getByText("Save 2 songs"));
+  expect(mockPost).toHaveBeenCalledWith("/playlists/builder/save", {
+    source: "library",
+    recommendationMode: "online",
+    name: main.name + " mix",
+    tracks: [seed, extra],
+  });
+});
+
+it("can expand cached Discovery matches with every lookup kept offline", async () => {
+  enableRecommendations();
+  serveSuggestions(true);
+  await open();
+  await turnRecommendationsOff();
+  await pickSeedsAndPreview();
+  expect(mockGet).toHaveBeenCalledWith("/playlists/builder/artists", {
+    params: { source: "library", q: "Roots", recommendationMode: "offline" },
+    signal: expect.anything(),
+  });
+  expect(mockPost).toHaveBeenCalledWith(
+    "/playlists/builder/options",
+    { source: "library", artist: main, recommendationMode: "offline" },
+    { signal: expect.anything() },
+  );
+  expect(screen.getByText("From cached recommendations.")).toBeTruthy();
+  await fireEvent.press(screen.getByText("Include discoveries"));
+  await screen.findByText("Save 3 songs");
+  expect(mockPost).toHaveBeenCalledWith("/playlists/builder/preview", {
+    source: "discovery",
+    recommendationMode: "offline",
+    artist: main,
+    seedTrackIds: [seed.id],
+    similarArtists: [related],
+    size: 20,
+  });
+  expect(
+    mockPost.mock.calls.every(
+      ([, body]) => body.recommendationMode === "offline",
+    ),
+  ).toBe(true);
+  await fireEvent.press(screen.getByText("Edit mix"));
+  expect(
+    await screen.findByRole("checkbox", { name: /You Got Me/ }),
+  ).toBeChecked();
+  expect(screen.getByText(related.name)).toBeTruthy();
+  expect(
+    screen.getByText("Use your Library and previously cached recommendations."),
+  ).toBeTruthy();
+  await fireEvent.press(screen.getByText("Preview playlist"));
+  await fireEvent.press(await screen.findByText("Save 3 songs"));
+  expect(mockPost).toHaveBeenCalledWith("/playlists/builder/save", {
+    source: "discovery",
+    recommendationMode: "offline",
+    name: main.name + " mix",
+    tracks: [seed, extra, discovery],
+  });
+});
+
+it.each([false, true])(
+  "only checks online on request and preserves review edits (cached teasers: %s)",
+  async (cached) => {
+    enableRecommendations();
+    serveSuggestions(cached);
+    await open();
+    await turnRecommendationsOff();
+    await pickSeedsAndPreview();
+    await fireEvent.changeText(
+      screen.getByLabelText("Playlist name"),
+      "My Philadelphia mix",
+    );
+    await fireEvent.press(
+      screen.getByRole("checkbox", { name: /Next Lifetime/ }),
+    );
+    if (cached) expect(screen.getByText(discovery.trackName)).toBeTruthy();
+    else expect(screen.queryByText(discovery.trackName)).toBeNull();
+    expect(
+      mockPost.mock.calls.every(
+        ([, body]) => body.recommendationMode === "offline",
+      ),
+    ).toBe(true);
+    await fireEvent.press(screen.getByText("Check Discovery"));
+    await screen.findByText(
+      "Including these discoveries enables online recommendations for this mix.",
+    );
+    expect(screen.getByText(discovery.trackName)).toBeTruthy();
+    expect(screen.getByText("Save 1 song")).toBeTruthy();
+    expect(mockPost).toHaveBeenLastCalledWith("/playlists/builder/preview", {
+      source: "library",
+      recommendationMode: "online",
+      artist: main,
+      seedTrackIds: [seed.id],
+      similarArtists: [related],
+      size: 20,
+    });
+    await fireEvent.press(screen.getByText("Include discoveries"));
+    await screen.findByText("Save 2 songs");
+    expect(mockPost).toHaveBeenLastCalledWith("/playlists/builder/preview", {
+      source: "discovery",
+      recommendationMode: "online",
+      artist: main,
+      seedTrackIds: [seed.id],
+      similarArtists: [related],
+      size: 20,
+    });
+    await fireEvent.press(screen.getByText("Save 2 songs"));
+    expect(mockPost).toHaveBeenLastCalledWith("/playlists/builder/save", {
+      source: "discovery",
+      recommendationMode: "online",
+      name: "My Philadelphia mix",
+      tracks: [seed, discovery],
+    });
+  },
+);

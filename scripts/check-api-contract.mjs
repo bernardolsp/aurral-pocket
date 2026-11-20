@@ -646,7 +646,10 @@ function checkContractVersion({ status, body }) {
   const dropped = pocket.features.filter(
     (name) =>
       !served.has(name) &&
-      !(name === "playlistBuilder" && PINNED_VERSION === "3.0.0"),
+      !(
+        ["playlistBuilder", "playlistBuilderRecommendations"].includes(name) &&
+        PINNED_VERSION === "3.0.0"
+      ),
   );
   const unknown = api.features.filter(
     (name) => !pocket.features.includes(name),

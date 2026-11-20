@@ -10,6 +10,7 @@ import {
   searchBuilderArtists,
   type BuilderArtist,
   type BuilderSource,
+  type RecommendationMode,
 } from "@/lib/api/playlist-builder";
 
 export function artistKey(artist: BuilderArtist) {
@@ -20,11 +21,13 @@ export function artistKey(artist: BuilderArtist) {
 
 export function BuilderArtistPicker({
   source,
+  recommendationMode,
   onPick,
   excluded = [],
   label,
 }: {
   source: BuilderSource;
+  recommendationMode?: RecommendationMode;
   onPick: (artist: BuilderArtist) => void;
   excluded?: BuilderArtist[];
   label: string;
@@ -32,8 +35,9 @@ export function BuilderArtistPicker({
   const [query, setQuery] = useState("");
   const term = useDebouncedValue(query.trim());
   const search = useQuery({
-    queryKey: ["playlist-builder", "artists", source, term],
-    queryFn: ({ signal }) => searchBuilderArtists(source, term, signal),
+    queryKey: ["playlist-builder", "artists", source, recommendationMode, term],
+    queryFn: ({ signal }) =>
+      searchBuilderArtists(source, term, signal, recommendationMode),
     enabled: term.length > 0 && query.trim() === term,
     staleTime: 60_000,
     retry: false,

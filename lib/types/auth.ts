@@ -36,6 +36,7 @@ export type ServerFeature =
   | "queuePause"
   | "streamTranscoding"
   | "playlistBuilder"
+  | "playlistBuilderRecommendations"
   // Reviewed, not adopted: pocket has no Friends, Blends, Community, playlist
   // collaborator or device pairing screens.
   | "communityPlaylists"

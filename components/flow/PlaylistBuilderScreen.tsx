@@ -20,6 +20,8 @@ import {
 import { FlowAccessGate } from "@/components/flow/FlowAccessGate";
 import { SegmentedRow } from "@/components/flow/SegmentedRow";
 import { SizeStepper } from "@/components/flow/SizeStepper";
+import { BuilderDiscoveryTeaser } from "@/components/flow/BuilderDiscoveryTeaser";
+import { Switch } from "@/components/ui/Switch";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Chip } from "@/components/ui/Chip";
@@ -35,6 +37,9 @@ import {
   previewBuilder,
   saveBuilder,
   type BuilderArtist,
+  type BuilderRecipe,
+  type BuilderPreview,
+  type RecommendationMode,
   type BuilderSource,
   type BuilderTrack,
 } from "@/lib/api/playlist-builder";
@@ -78,23 +83,48 @@ function BuilderAccess() {
         <Text>Your server does not offer Playlist Builder.</Text>
       </ScreenCenter>
     );
-  return <BuilderForm />;
+  return (
+    <BuilderForm
+      recommendationsAvailable={health.data.api.features.includes(
+        "playlistBuilderRecommendations",
+      )}
+    />
+  );
 }
 
-function BuilderForm() {
+function BuilderForm({
+  recommendationsAvailable,
+}: {
+  recommendationsAvailable: boolean;
+}) {
   const colors = useColors();
   const scroll = useRef<ScrollViewInstance>(null);
   const [source, setSource] = useState<BuilderSource>("library");
   const [artist, setArtist] = useState<BuilderArtist | null>(null);
-  const [seedIds, setSeedIds] = useState<string[]>([]);
+  const [selectedSeeds, setSelectedSeeds] = useState<BuilderTrack[]>([]);
+  const seedIds = selectedSeeds.map((track) => track.id);
+  const [online, setOnline] = useState(true);
+  const recommendationMode = recommendationsAvailable
+    ? online
+      ? "online"
+      : "offline"
+    : undefined;
+  const [removedSeeds, setRemovedSeeds] = useState(0);
   const [similar, setSimilar] = useState<BuilderArtist[]>([]);
   const [size, setSize] = useState(20);
   const [expanded, setExpanded] = useState(false);
   const [reviewing, setReviewing] = useState(false);
   const options = useQuery({
-    queryKey: ["playlist-builder", "options", source, artist],
-    queryFn: ({ signal }) => getBuilderOptions(source, artist!, signal),
-    enabled: !!artist,
+    queryKey: [
+      "playlist-builder",
+      "options",
+      source,
+      recommendationMode,
+      artist,
+    ],
+    queryFn: ({ signal }) =>
+      getBuilderOptions(source, artist!, signal, recommendationMode),
+    enabled: !!artist && !reviewing,
     staleTime: 60_000,
     retry: false,
   });
@@ -102,15 +132,31 @@ function BuilderForm() {
   function chooseArtist(next: BuilderArtist | null) {
     Keyboard.dismiss();
     setArtist(next);
-    setSeedIds([]);
+    setSelectedSeeds([]);
+    setRemovedSeeds(0);
     setSimilar([]);
     setExpanded(false);
   }
-  function toggleSeed(id: string) {
-    const next = seedIds.includes(id)
-      ? seedIds.filter((entry) => entry !== id)
-      : [...seedIds, id];
-    setSeedIds(next);
+  function chooseMode(nextSource: BuilderSource, nextOnline: boolean) {
+    if (!recommendationsAvailable) {
+      chooseArtist(null);
+    } else {
+      const eligible =
+        nextSource === "library" || !nextOnline
+          ? selectedSeeds.filter((track) => track.source === "library")
+          : selectedSeeds;
+      setRemovedSeeds(selectedSeeds.length - eligible.length);
+      setSelectedSeeds(eligible);
+    }
+    setSource(nextSource);
+    setOnline(nextOnline);
+  }
+  function toggleSeed(track: BuilderTrack) {
+    const next = seedIds.includes(track.id)
+      ? selectedSeeds.filter((entry) => entry.id !== track.id)
+      : [...selectedSeeds, track];
+    setRemovedSeeds(0);
+    setSelectedSeeds(next);
     setSize(Math.max(size, Math.max(1, next.length) + similar.length));
   }
   function includeArtist(item: BuilderArtist) {
@@ -124,6 +170,7 @@ function BuilderForm() {
     scroll.current?.scrollTo({ y: 0, animated: false });
     preview.mutate({
       source,
+      ...(recommendationMode && { recommendationMode }),
       artist,
       seedTrackIds: seedIds,
       similarArtists: similar,
@@ -163,16 +210,18 @@ function BuilderForm() {
               onPress={() => setReviewing(false)}
             />
           </>
-        ) : (
+        ) : preview.data && preview.variables ? (
           <BuilderReview
-            source={source}
-            artist={artist}
-            size={size}
-            tracks={preview.data?.tracks ?? []}
-            missingArtists={preview.data?.missingArtists ?? []}
-            onBack={() => setReviewing(false)}
+            recipe={preview.variables}
+            result={preview.data}
+            onBack={(recipe) => {
+              setSource(recipe.source);
+              if (recipe.recommendationMode)
+                setOnline(recipe.recommendationMode === "online");
+              setReviewing(false);
+            }}
           />
-        )
+        ) : null
       ) : (
         <>
           <View style={styles.section}>
@@ -181,23 +230,50 @@ function BuilderForm() {
               options={sources}
               value={source}
               onChange={(next) => {
-                if (next !== source) {
-                  chooseArtist(null);
-                  setSource(next);
-                }
+                if (next !== source) chooseMode(next, online);
               }}
             />
-            <Text variant="caption">
-              {source === "library"
-                ? "Use songs already in your Aurral Library."
-                : "Include songs from your Library and the discovery catalog."}
-            </Text>
+            {recommendationsAvailable ? (
+              <>
+                <View style={styles.switchRow}>
+                  <Text style={styles.song}>Online recommendations</Text>
+                  <Switch
+                    accessibilityLabel="Online recommendations"
+                    value={online}
+                    onValueChange={(value) => chooseMode(source, value)}
+                  />
+                </View>
+                <Text variant="caption">
+                  {online
+                    ? source === "library"
+                      ? "Check recommendations online and keep only songs in your Library."
+                      : "Find recommendations in your Library and the discovery catalog."
+                    : "Use your Library and previously cached recommendations."}
+                </Text>
+                {removedSeeds > 0 && (
+                  <Text variant="caption">
+                    {removedSeeds} catalog-only{" "}
+                    {removedSeeds === 1 ? "seed was" : "seeds were"} removed.
+                  </Text>
+                )}
+              </>
+            ) : (
+              <Text variant="caption">
+                {source === "library"
+                  ? "Use songs already in your Aurral Library."
+                  : "Include songs from your Library and the discovery catalog."}
+              </Text>
+            )}
           </View>
           <View style={styles.section}>
             <SectionLabel>Main artist</SectionLabel>
             {artist ? (
               <Card style={styles.artist}>
-                <BuilderPortrait artist={artist} source={source} />
+                <BuilderPortrait
+                  artist={artist}
+                  source={source}
+                  recommendationMode={recommendationMode}
+                />
                 <Text style={styles.artistName}>{artist.name}</Text>
                 <Button
                   variant="inline"
@@ -209,6 +285,7 @@ function BuilderForm() {
               <BuilderArtistPicker
                 key={source}
                 source={source}
+                recommendationMode={recommendationMode}
                 label="Find a main artist"
                 onPick={chooseArtist}
               />
@@ -243,7 +320,7 @@ function BuilderForm() {
                       disabled={
                         !seedIds.includes(track.id) && seedIds.length >= 5
                       }
-                      onPress={() => toggleSeed(track.id)}
+                      onPress={() => toggleSeed(track)}
                     />
                   ))}
                   {seeds.length > 5 && (
@@ -300,6 +377,7 @@ function BuilderForm() {
                     <BuilderArtistPicker
                       key={artistKey(artist)}
                       source={source}
+                      recommendationMode={recommendationMode}
                       excluded={[artist, ...similar]}
                       label="Add another artist"
                       onPick={includeArtist}
@@ -327,14 +405,16 @@ function BuilderForm() {
 function BuilderPortrait({
   artist,
   source,
+  recommendationMode,
 }: {
   artist: BuilderArtist;
   source: BuilderSource;
+  recommendationMode?: RecommendationMode;
 }) {
   const colors = useColors();
   const path = artist.libraryArtistId
     ? `/api/library/artists/${artist.libraryArtistId}/cover?cachedOnly=1`
-    : source === "discovery" && artist.mbid
+    : source === "discovery" && recommendationMode !== "offline" && artist.mbid
       ? `/api/artists/${artist.mbid}/image`
       : null;
   return (
@@ -351,6 +431,14 @@ function BuilderPortrait({
     </View>
   );
 }
+
+const pickReasonLabels = {
+  seed: "Your seed song",
+  recording: "Similar to a seed song",
+  chosenArtist: "Selected artist",
+  relatedArtist: "Related artist",
+  genre: "Shared genre",
+};
 
 function TrackRow({
   track,
@@ -370,7 +458,14 @@ function TrackRow({
       disabled={disabled}
       accessibilityRole="checkbox"
       accessibilityState={{ checked: selected, disabled }}
-      accessibilityLabel={`${track.trackName}, ${track.artistName}, ${track.source === "library" ? "Library" : "Discovery"}`}
+      accessibilityLabel={[
+        track.trackName,
+        track.artistName,
+        track.source === "library" ? "Library" : "Discovery",
+        track.pickReason && pickReasonLabels[track.pickReason],
+      ]
+        .filter(Boolean)
+        .join(", ")}
       style={[styles.track, disabled && styles.disabled]}
     >
       <Ionicons
@@ -387,6 +482,7 @@ function TrackRow({
             track.artistName,
             track.albumName,
             track.source === "library" ? "Library" : "Discovery",
+            track.pickReason ? pickReasonLabels[track.pickReason] : null,
           ]
             .filter(Boolean)
             .join(" · ")}
@@ -397,30 +493,36 @@ function TrackRow({
 }
 
 function BuilderReview({
-  source,
-  artist,
-  size,
-  tracks,
-  missingArtists,
+  recipe,
+  result,
   onBack,
 }: {
-  source: BuilderSource;
-  artist: BuilderArtist;
-  size: number;
-  tracks: BuilderTrack[];
-  missingArtists: string[];
-  onBack: () => void;
+  recipe: BuilderRecipe;
+  result: BuilderPreview;
+  onBack: (recipe: BuilderRecipe) => void;
 }) {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const [name, setName] = useState(`${artist.name} mix`);
+  const [name, setName] = useState(`${recipe.artist.name} mix`);
   const [omitted, setOmitted] = useState<string[]>([]);
-  const accepted = tracks.filter((track) => !omitted.includes(track.id));
+  const expansion = useMutation({ mutationFn: previewBuilder });
   const save = useMutation({ mutationFn: saveBuilder });
+  const active =
+    expansion.data && expansion.variables ? expansion.variables : recipe;
+  const { artist, size, source, recommendationMode } = active;
+  const { tracks, missingArtists, recommendationBasis } =
+    expansion.data ?? result;
+  const accepted = tracks.filter((track) => !omitted.includes(track.id));
+  const busy = save.isPending || expansion.isPending;
   function submit() {
-    if (!accepted.length || !name.trim() || save.isPending) return;
+    if (!accepted.length || !name.trim() || busy) return;
     save.mutate(
-      { source, name: name.trim(), tracks: accepted },
+      {
+        source,
+        ...(recommendationMode && { recommendationMode }),
+        name: name.trim(),
+        tracks: accepted,
+      },
       {
         onSuccess: () => {
           void queryClient.invalidateQueries({ queryKey: flowKeys.status() });
@@ -439,7 +541,11 @@ function BuilderReview({
       <View style={styles.section}>
         <SectionLabel>Playlist preview</SectionLabel>
         <View style={styles.reviewArtist}>
-          <BuilderPortrait artist={artist} source={source} />
+          <BuilderPortrait
+            artist={artist}
+            source={source}
+            recommendationMode={recommendationMode}
+          />
           <Text variant="title" style={styles.trackText}>
             {artist.name} mix
           </Text>
@@ -449,6 +555,13 @@ function BuilderReview({
             ? `Found ${tracks.length} of ${size} requested songs.`
             : `${tracks.length} songs`}
         </Text>
+        {recommendationMode && recommendationBasis && (
+          <Text variant="caption">
+            {recommendationBasis === "recording"
+              ? "Based on your seed songs."
+              : "Based on your artists."}
+          </Text>
+        )}
         {missingArtists.length > 0 && (
           <Text variant="caption">
             No available songs from {missingArtists.join(", ")}.
@@ -457,8 +570,8 @@ function BuilderReview({
         <Button
           variant="inline"
           title="Edit mix"
-          disabled={save.isPending}
-          onPress={onBack}
+          disabled={busy}
+          onPress={() => onBack(active)}
         />
       </View>
       {!!tracks.length && (
@@ -466,7 +579,7 @@ function BuilderReview({
           <Input
             value={name}
             onChangeText={setName}
-            editable={!save.isPending}
+            editable={!busy}
             accessibilityLabel="Playlist name"
             placeholder="Playlist name"
             maxLength={500}
@@ -474,29 +587,45 @@ function BuilderReview({
           {save.isError && <Text variant="error">{save.error.message}</Text>}
           <Button
             title={`Save ${accepted.length} ${accepted.length === 1 ? "song" : "songs"}`}
-            disabled={!accepted.length || !name.trim()}
+            disabled={!accepted.length || !name.trim() || expansion.isPending}
             loading={save.isPending}
             onPress={submit}
           />
-          <View style={styles.section}>
-            {tracks.map((track) => (
-              <TrackRow
-                key={track.id}
-                track={track}
-                disabled={save.isPending}
-                selected={!omitted.includes(track.id)}
-                onPress={() =>
-                  setOmitted((current) =>
-                    current.includes(track.id)
-                      ? current.filter((id) => id !== track.id)
-                      : [...current, track.id],
-                  )
-                }
-              />
-            ))}
-          </View>
         </>
       )}
+      {source === "library" && recommendationMode && (
+        <BuilderDiscoveryTeaser
+          recipe={recipe}
+          tracks={result.discoveryTeaser ?? []}
+          saving={save.isPending}
+          expanding={expansion.isPending}
+          error={expansion.error?.message}
+          onExpand={(mode) =>
+            expansion.mutate({
+              ...recipe,
+              source: "discovery",
+              recommendationMode: mode,
+            })
+          }
+        />
+      )}
+      <View style={styles.section}>
+        {tracks.map((track) => (
+          <TrackRow
+            key={track.id}
+            track={track}
+            disabled={busy}
+            selected={!omitted.includes(track.id)}
+            onPress={() =>
+              setOmitted((current) =>
+                current.includes(track.id)
+                  ? current.filter((id) => id !== track.id)
+                  : [...current, track.id],
+              )
+            }
+          />
+        ))}
+      </View>
     </>
   );
 }
@@ -504,6 +633,13 @@ function BuilderReview({
 const styles = StyleSheet.create({
   content: { padding: 16, paddingBottom: 48, gap: 20 },
   section: { gap: 6 },
+  switchRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    marginTop: 8,
+  },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
   artist: { padding: 12, flexDirection: "row", alignItems: "center", gap: 12 },
   portrait: {
