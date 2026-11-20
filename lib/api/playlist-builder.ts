@@ -2,6 +2,8 @@ import { api } from "./client";
 
 export type BuilderSource = "library" | "discovery";
 
+export type BuilderHops = 1 | 2 | 3;
+
 export type RecommendationMode = "online" | "offline";
 
 export type BuilderArtist = {
@@ -17,6 +19,7 @@ export type BuilderTrack = {
   albumName: string | null;
   source: BuilderSource;
   recordingMbid?: string;
+  recommendationHop?: BuilderHops;
   pickReason?:
     "seed" | "recording" | "chosenArtist" | "relatedArtist" | "genre";
 };
@@ -29,6 +32,7 @@ export type BuilderPreview = {
 };
 
 export type BuilderRecipe = {
+  maxHops?: BuilderHops;
   source: BuilderSource;
   recommendationMode?: RecommendationMode;
   artist: BuilderArtist;

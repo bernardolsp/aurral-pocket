@@ -651,6 +651,7 @@ function checkContractVersion({ status, body }) {
         [
           "playlistBuilder",
           "playlistBuilderRecommendations",
+          "playlistBuilderExploreFurther",
           "staticPlaylistFetchMissing",
         ].includes(name) && PINNED_VERSION === "3.0.0"
       ),

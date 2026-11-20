@@ -1,3 +1,4 @@
+import { Alert } from "react-native";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   render,
@@ -120,6 +121,7 @@ it("previews a seeded mix and queues exactly the named, accepted tracks", async 
   await open();
   await chooseMain();
   expect(screen.queryByLabelText("Online recommendations")).toBeNull();
+  expect(screen.queryByRole("button", { name: "Advanced options" })).toBeNull();
   expect(mockGet).toHaveBeenCalledWith("/playlists/builder/artists", {
     params: { source: "library", q: "Roots" },
     signal: expect.anything(),
@@ -180,10 +182,16 @@ const discovery = {
   albumName: "Like Water for Chocolate",
 };
 
-function enableRecommendations() {
+function enableRecommendations(exploreFurther = false) {
   (useServerHealth as jest.Mock).mockReturnValue({
     data: {
-      api: { features: ["playlistBuilder", "playlistBuilderRecommendations"] },
+      api: {
+        features: [
+          "playlistBuilder",
+          "playlistBuilderRecommendations",
+          ...(exploreFurther ? ["playlistBuilderExploreFurther"] : []),
+        ],
+      },
     },
   });
 }
@@ -356,3 +364,78 @@ it.each([false, true])(
     });
   },
 );
+
+it("starts at one hop with Advanced collapsed and explains the setting on demand", async () => {
+  enableRecommendations(true);
+  await open();
+  await chooseMain();
+  const disclosure = screen.getByRole("button", {
+    name: "Advanced options",
+    expanded: false,
+  });
+  expect(screen.queryByText("Max hops")).toBeNull();
+  await fireEvent.press(disclosure);
+  expect(
+    screen.getByRole("radio", { name: "1 hop", checked: true }),
+  ).toBeTruthy();
+  const alert = jest.spyOn(Alert, "alert").mockImplementation(() => {});
+  try {
+    await fireEvent.press(
+      screen.getByRole("button", { name: "About max hops" }),
+    );
+    expect(alert).toHaveBeenCalledWith(
+      "Max hops",
+      expect.stringContaining("folk ballad"),
+    );
+  } finally {
+    alert.mockRestore();
+  }
+  await fireEvent.press(
+    screen.getByRole("button", { name: "Advanced options", expanded: true }),
+  );
+  expect(screen.queryByRole("radio", { name: "1 hop" })).toBeNull();
+  await fireEvent.press(screen.getByText("Preview playlist"));
+  expect(mockPost).toHaveBeenLastCalledWith(
+    "/playlists/builder/preview",
+    expect.objectContaining({ maxHops: 1 }),
+  );
+});
+
+it("keeps the selected hop limit through offline preview, a live check, expansion and editing", async () => {
+  enableRecommendations(true);
+  serveSuggestions(false);
+  await open();
+  await chooseMain();
+  await turnRecommendationsOff();
+  await fireEvent.press(
+    screen.getByRole("button", { name: "Advanced options" }),
+  );
+  await fireEvent.press(screen.getByRole("radio", { name: "2 hops" }));
+  expect(
+    screen.getByRole("radio", { name: "2 hops", checked: true }),
+  ).toBeTruthy();
+  await fireEvent.press(screen.getByRole("radio", { name: "3 hops" }));
+  await fireEvent.press(screen.getByRole("checkbox", { name: /You Got Me/ }));
+  await fireEvent.press(screen.getByText("Preview playlist"));
+  await fireEvent.press(await screen.findByText("Check Discovery"));
+  await fireEvent.press(await screen.findByText("Include discoveries"));
+  await fireEvent.press(await screen.findByText("Edit mix"));
+  await fireEvent.press(
+    screen.getByRole("button", { name: "Advanced options" }),
+  );
+  expect(
+    screen.getByRole("radio", { name: "3 hops", checked: true }),
+  ).toBeTruthy();
+  const recipes = mockPost.mock.calls
+    .filter(([path]) => path.endsWith("/preview"))
+    .map(([, recipe]) => [
+      recipe.maxHops,
+      recipe.source,
+      recipe.recommendationMode,
+    ]);
+  expect(recipes).toEqual([
+    [3, "library", "offline"],
+    [3, "library", "online"],
+    [3, "discovery", "online"],
+  ]);
+});

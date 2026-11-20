@@ -20,6 +20,7 @@ import {
 import { FlowAccessGate } from "@/components/flow/FlowAccessGate";
 import { SegmentedRow } from "@/components/flow/SegmentedRow";
 import { SizeStepper } from "@/components/flow/SizeStepper";
+import { BuilderAdvancedOptions } from "@/components/flow/BuilderAdvancedOptions";
 import { BuilderDiscoveryTeaser } from "@/components/flow/BuilderDiscoveryTeaser";
 import { Switch } from "@/components/ui/Switch";
 import { Button } from "@/components/ui/Button";
@@ -37,6 +38,7 @@ import {
   previewBuilder,
   saveBuilder,
   type BuilderArtist,
+  type BuilderHops,
   type BuilderRecipe,
   type BuilderPreview,
   type RecommendationMode,
@@ -85,6 +87,9 @@ function BuilderAccess() {
     );
   return (
     <BuilderForm
+      exploreFurther={health.data.api.features.includes(
+        "playlistBuilderExploreFurther",
+      )}
       recommendationsAvailable={health.data.api.features.includes(
         "playlistBuilderRecommendations",
       )}
@@ -94,8 +99,10 @@ function BuilderAccess() {
 
 function BuilderForm({
   recommendationsAvailable,
+  exploreFurther,
 }: {
   recommendationsAvailable: boolean;
+  exploreFurther: boolean;
 }) {
   const colors = useColors();
   const scroll = useRef<ScrollViewInstance>(null);
@@ -112,6 +119,7 @@ function BuilderForm({
   const [removedSeeds, setRemovedSeeds] = useState(0);
   const [similar, setSimilar] = useState<BuilderArtist[]>([]);
   const [size, setSize] = useState(20);
+  const [maxHops, setMaxHops] = useState<BuilderHops>(1);
   const [expanded, setExpanded] = useState(false);
   const [reviewing, setReviewing] = useState(false);
   const options = useQuery({
@@ -171,6 +179,7 @@ function BuilderForm({
     preview.mutate({
       source,
       ...(recommendationMode && { recommendationMode }),
+      ...(exploreFurther && { maxHops }),
       artist,
       seedTrackIds: seedIds,
       similarArtists: similar,
@@ -393,6 +402,9 @@ function BuilderForm({
                   onChange={setSize}
                 />
               </View>
+              {exploreFurther && (
+                <BuilderAdvancedOptions value={maxHops} onChange={setMaxHops} />
+              )}
               <Button title="Preview playlist" onPress={requestPreview} />
             </>
           )}
@@ -452,6 +464,12 @@ function TrackRow({
   onPress: () => void;
 }) {
   const colors = useColors();
+  const reason =
+    track.pickReason === "recording" &&
+    track.recommendationHop &&
+    track.recommendationHop > 1
+      ? `${track.recommendationHop} hops from a seed song`
+      : track.pickReason && pickReasonLabels[track.pickReason];
   return (
     <Card
       onPress={onPress}
@@ -462,7 +480,7 @@ function TrackRow({
         track.trackName,
         track.artistName,
         track.source === "library" ? "Library" : "Discovery",
-        track.pickReason && pickReasonLabels[track.pickReason],
+        reason,
       ]
         .filter(Boolean)
         .join(", ")}
@@ -482,7 +500,7 @@ function TrackRow({
             track.artistName,
             track.albumName,
             track.source === "library" ? "Library" : "Discovery",
-            track.pickReason ? pickReasonLabels[track.pickReason] : null,
+            reason,
           ]
             .filter(Boolean)
             .join(" · ")}
