@@ -113,6 +113,8 @@ export type FlowJob = {
   /** Artwork uploaded for this track, as a server path. */
   artworkUrl?: string | null;
   status: FlowJobStatus;
+  /** Static playlist jobs only. Aurral checks Library ownership and job state. */
+  canFetchMissing?: boolean;
   finalPath?: string | null;
   reason?: string | null;
   createdAt?: number;

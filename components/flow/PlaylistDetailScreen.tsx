@@ -8,6 +8,8 @@ import DeleteIcon from "@expo/material-symbols/delete.xml";
 
 import { EmptyState } from "@/components/library/EmptyState";
 import { pluginMenuSection } from "@/components/plugins/PluginMenuActions";
+import { Chip } from "@/components/ui/Chip";
+import { useServerFeatures } from "@/hooks/auth/use-server-features";
 import { CircleButton } from "@/components/ui/CircleButton";
 import { PLAY_ROW_HEIGHT, PlayRow } from "@/components/ui/PlayRow";
 import { ScreenCenter } from "@/components/ui/ScreenCenter";
@@ -24,6 +26,7 @@ import {
   useDeleteSharedPlaylist,
   useDeleteSharedPlaylistTrack,
   useFlowStatusSuspense,
+  useFetchMissingPlaylistTracks,
   usePlaylistJobs,
   useTrackJobMenu,
 } from "@/hooks/flow";
@@ -36,7 +39,7 @@ import {
   jobToPlayerTrack,
 } from "@/lib/player/track-item";
 import { saveStatusLine } from "@/lib/offline/format";
-import { useIsOffline } from "@/lib/offline/network";
+import { isOffline, useIsOffline } from "@/lib/offline/network";
 import { savePlaylist, useSavedStatus } from "@/lib/offline/saved-library";
 import {
   TrackActionsSheet,
@@ -115,6 +118,20 @@ function PlaylistPage({
   // A saved playlist still lists and plays its tracks with no connection.
   const jobs = liveJobs ?? savedJobs ?? NO_JOBS;
   const jobsLoading = liveJobsLoading && !savedJobs;
+  const isOffline = useIsOffline();
+  const missingCount = useMemo(
+    () =>
+      new Set(
+        liveJobs
+          ?.filter(
+            (job) =>
+              job.canFetchMissing &&
+              (job.status === "saved" || job.status === "failed"),
+          )
+          .map((job) => job.id),
+      ).size,
+    [liveJobs],
+  );
   const saveLine = saveStatusLine(saveOffline.status);
   const collection = useMemo(
     () => ({ ...playlist, kind: "shared" as const }),
@@ -298,6 +315,12 @@ function PlaylistPage({
                   {saveLine}
                 </Text>
               ) : null}
+              {!isOffline && missingCount > 0 && (
+                <FetchMissingButton
+                  playlistId={playlist.id}
+                  count={missingCount}
+                />
+              )}
             </CollectionHero>
             <PlayRow
               title={playlist.name}
@@ -324,6 +347,38 @@ function PlaylistPage({
         target={trackActions.target}
         onClose={trackActions.close}
       />
+    </>
+  );
+}
+
+function FetchMissingButton({
+  playlistId,
+  count,
+}: {
+  playlistId: string;
+  count: number;
+}) {
+  const supported = useServerFeatures().includes("staticPlaylistFetchMissing");
+  const fetchMissing = useFetchMissingPlaylistTracks();
+  if (!supported) return null;
+  return (
+    <>
+      <Chip
+        size="md"
+        variant="brand"
+        icon="cloud-download-outline"
+        label={
+          fetchMissing.isPending
+            ? "Queuing missing tracks…"
+            : `Fetch Missing (${count})`
+        }
+        accessibilityLabel={`Fetch ${count} missing ${count === 1 ? "track" : "tracks"} on your Aurral server`}
+        loading={fetchMissing.isPending}
+        onPress={() => {
+          if (!isOffline()) fetchMissing.mutate(playlistId);
+        }}
+      />
+      <Text variant="caption">Queue missing tracks on your Aurral server.</Text>
     </>
   );
 }

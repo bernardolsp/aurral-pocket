@@ -16,6 +16,7 @@ import {
   deleteSharedPlaylist,
   deleteSharedPlaylistTrack,
   downloadSavedFlowTracks,
+  fetchMissingPlaylistTracks,
   setFlowEnabled,
   startFlow,
   updateFlow,
@@ -240,6 +241,35 @@ export function useDownloadSavedFlowTracks() {
       }
       toastError("Couldn't download tracks", err);
     },
+  });
+}
+
+export function useFetchMissingPlaylistTracks() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: fetchMissingPlaylistTracks,
+    networkMode: "always",
+    retry: false,
+    onSuccess: async ({ queued, trackCount }, playlistId) => {
+      Burnt.toast({
+        title: queued
+          ? `Queued ${trackCount} missing ${trackCount === 1 ? "track" : "tracks"}`
+          : "No missing tracks to fetch",
+        preset: "done",
+      });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: flowKeys.jobs(playlistId) }),
+        queryClient.invalidateQueries({ queryKey: flowKeys.status() }),
+        ...(queued
+          ? [
+              queryClient.invalidateQueries({
+                queryKey: activityKeys.feedAll(),
+              }),
+            ]
+          : []),
+      ]);
+    },
+    onError: (err) => Alert.alert("Couldn't fetch missing tracks", err.message),
   });
 }
 

@@ -187,6 +187,19 @@ export async function addSharedPlaylistTracks(
   return { playlistId: r.data.playlistId, operationId: r.data.operationId };
 }
 
+export async function fetchMissingPlaylistTracks(playlistId: string) {
+  const r = await api.post<{
+    success: true;
+    playlistId: string;
+    queued: boolean;
+    trackCount: number;
+    operationId: number | null;
+  }>(
+    `${FLOW}/static-playlists/${encodeURIComponent(playlistId)}/fetch-missing`,
+  );
+  return r.data;
+}
+
 export async function updateSharedPlaylist(
   playlistId: string,
   payload: { name?: string; tracks?: SharedPlaylistTrack[] },

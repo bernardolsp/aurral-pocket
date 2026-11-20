@@ -2,6 +2,10 @@ jest.mock("burnt", () => ({ toast: jest.fn() }));
 
 // Online unless a test takes the connection away.
 let mockOffline = false;
+let mockServerFeatures: string[] = [];
+jest.mock("@/hooks/auth/use-server-features", () => ({
+  useServerFeatures: () => mockServerFeatures,
+}));
 jest.mock("@/lib/offline/network", () => ({
   isOffline: () => mockOffline,
   useIsOffline: () => mockOffline,
@@ -25,6 +29,7 @@ jest.mock("@/lib/api/flow", () => ({
   deleteSharedPlaylist: jest.fn(() => Promise.resolve()),
   deleteSharedPlaylistTrack: jest.fn(() => Promise.resolve()),
   cancelTrackJob: jest.fn(),
+  fetchMissingPlaylistTracks: jest.fn(),
   getFlowStatus: jest.fn(),
   getPlaylistJobs: jest.fn(),
   researchFlowTrack: jest.fn(() => Promise.resolve()),
@@ -188,6 +193,7 @@ import * as Burnt from "burnt";
 import { PlaylistDetailScreen } from "@/components/flow/PlaylistDetailScreen";
 import {
   cancelTrackJob,
+  fetchMissingPlaylistTracks,
   deleteSharedPlaylist,
   deleteSharedPlaylistTrack,
   getFlowStatus,
@@ -296,6 +302,7 @@ function confirmAlert(buttonText: string) {
 }
 
 beforeEach(() => {
+  mockServerFeatures = [];
   jest.clearAllMocks();
   setBaseUrl("http://server");
   setAuthToken("token");
@@ -305,8 +312,8 @@ beforeEach(() => {
   serve();
 });
 
-afterEach(() => {
-  cleanup();
+afterEach(async () => {
+  await cleanup();
   clients.forEach((client) => client.clear());
   clients.length = 0;
 });
@@ -937,7 +944,7 @@ describe("saving a playlist offline", () => {
   it("opens from the phone with no connection, without asking the server", async () => {
     await open();
     await saveFromToolbar();
-    cleanup();
+    await cleanup();
     jest.clearAllMocks();
 
     // A track added since the save, ahead of the saved ones.
@@ -958,5 +965,114 @@ describe("saving a playlist offline", () => {
       "a",
       expect.anything(),
     );
+  });
+});
+
+describe("Fetch Missing", () => {
+  const missing = [
+    job("a", { status: "saved", canFetchMissing: true }),
+    job("b", { status: "failed", canFetchMissing: true }),
+    job("c", { status: "saved", canFetchMissing: false }),
+    job("d", { status: "done" }),
+    // A per-track action can optimistically change status before the next jobs snapshot.
+    job("e", { status: "pending", canFetchMissing: true }),
+  ];
+  const label = "Fetch 2 missing tracks on your Aurral server";
+  beforeEach(() => {
+    mockServerFeatures = ["staticPlaylistFetchMissing"];
+    serve({ jobs: missing });
+  });
+
+  it("queues only this playlist and refreshes authoritative eligibility", async () => {
+    const fetchTracks = jest.mocked(fetchMissingPlaylistTracks);
+    let finish!: () => void;
+    fetchTracks.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = () => {
+            serve({
+              jobs: missing.map((item) => ({
+                ...item,
+                canFetchMissing: false,
+              })),
+            });
+            resolve({
+              success: true,
+              playlistId: "pl-1",
+              queued: true,
+              trackCount: 2,
+              operationId: 16,
+            });
+          };
+        }),
+    );
+    await open();
+    expect(screen.getByLabelText("Save offline")).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText(label));
+    expect(screen.getByText("Queuing missing tracks…")).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText(label));
+    expect(fetchTracks).toHaveBeenCalledTimes(1);
+    expect(fetchTracks.mock.calls[0][0]).toBe("pl-1");
+    await act(async () => finish());
+    await waitFor(() => expect(screen.queryByLabelText(label)).toBeNull());
+    expect(Burnt.toast).toHaveBeenCalledWith({
+      title: "Queued 2 missing tracks",
+      preset: "done",
+    });
+  });
+
+  it("reports the server's zero count when another client has already fetched the tracks", async () => {
+    jest.mocked(fetchMissingPlaylistTracks).mockResolvedValueOnce({
+      success: true,
+      playlistId: "pl-1",
+      queued: false,
+      trackCount: 0,
+      operationId: null,
+    });
+    await open();
+    await fireEvent.press(screen.getByLabelText(label));
+    await waitFor(() =>
+      expect(Burnt.toast).toHaveBeenCalledWith({
+        title: "No missing tracks to fetch",
+        preset: "done",
+      }),
+    );
+  });
+
+  it("leaves eligible tracks available after a download source error", async () => {
+    const reason = "Configure a download source to fetch missing tracks.";
+    jest
+      .mocked(fetchMissingPlaylistTracks)
+      .mockRejectedValueOnce(new ApiError(409, reason));
+    await open();
+    await fireEvent.press(screen.getByLabelText(label));
+    await waitFor(() =>
+      expect(Alert.alert).toHaveBeenCalledWith(
+        "Couldn't fetch missing tracks",
+        reason,
+      ),
+    );
+    expect(screen.getByText("Fetch Missing (2)")).toBeTruthy();
+  });
+
+  it("shows no server fetch action offline", async () => {
+    mockOffline = true;
+    await open();
+    expect(screen.queryByLabelText(label)).toBeNull();
+    expect(fetchMissingPlaylistTracks).not.toHaveBeenCalled();
+  });
+
+  it("hides the action on older servers even when eligible jobs are cached", async () => {
+    mockServerFeatures = [];
+    await open();
+    expect(screen.queryByLabelText(label)).toBeNull();
+  });
+
+  it("ignores saved and failed members the server marks ineligible", async () => {
+    serve({
+      jobs: missing.map((item) => ({ ...item, canFetchMissing: false })),
+    });
+    await open();
+    expect(screen.queryByText(/Fetch Missing/)).toBeNull();
   });
 });

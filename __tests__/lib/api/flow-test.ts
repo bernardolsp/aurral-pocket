@@ -13,6 +13,7 @@ import {
   createFlowFromTemplate,
   createSharedPlaylist,
   getFlowTemplates,
+  fetchMissingPlaylistTracks,
   getFlowStreamPath,
   getFlowArtworkSource,
   getPlaylistsContaining,
@@ -159,4 +160,19 @@ describe("getFlowArtworkSource", () => {
       "https://example.com/api/playlists/artwork/pl-1?v=1730000000000",
     );
   });
+});
+
+it("fetches missing tracks only for the specified playlist and returns the accepted count", async () => {
+  const result = {
+    success: true,
+    playlistId: "pl/1",
+    queued: true,
+    trackCount: 2,
+    operationId: 7,
+  };
+  jest.mocked(api.post).mockResolvedValueOnce({ data: result, status: 200 });
+  await expect(fetchMissingPlaylistTracks("pl/1")).resolves.toEqual(result);
+  expect(api.post).toHaveBeenCalledWith(
+    "/playlists/static-playlists/pl%2F1/fetch-missing",
+  );
 });

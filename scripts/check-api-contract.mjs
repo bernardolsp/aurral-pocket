@@ -232,6 +232,7 @@ const CONTRACT = new Map([
   ["POST /library/albums/request", null],
   ["POST /library/downloads/track", null],
   ["GET /playlists/builder/artists", { artists: "array" }],
+  ["POST /playlists/static-playlists/:playlistId/fetch-missing", null],
   ["POST /playlists/flows", null],
   [
     "GET /playlists/status",
@@ -647,8 +648,11 @@ function checkContractVersion({ status, body }) {
     (name) =>
       !served.has(name) &&
       !(
-        ["playlistBuilder", "playlistBuilderRecommendations"].includes(name) &&
-        PINNED_VERSION === "3.0.0"
+        [
+          "playlistBuilder",
+          "playlistBuilderRecommendations",
+          "staticPlaylistFetchMissing",
+        ].includes(name) && PINNED_VERSION === "3.0.0"
       ),
   );
   const unknown = api.features.filter(
@@ -988,11 +992,14 @@ async function main() {
   // Before the probes: one of them signs this session out.
   const bootstrap = await request("GET", "/api/health/bootstrap", token);
   const contractFailed = checkContractVersion(bootstrap);
-  const builderAvailable =
-    bootstrap.body?.api?.features?.includes("playlistBuilder");
-  const extracted = extractPocketRoutes().filter(
-    (route) => builderAvailable || !route.raw.startsWith("/playlists/builder/"),
-  );
+  const features = bootstrap.body?.api?.features ?? [];
+  const extracted = extractPocketRoutes().filter((route) => {
+    if (route.raw.startsWith("/playlists/builder/"))
+      return features.includes("playlistBuilder");
+    if (route.raw.endsWith("/fetch-missing"))
+      return features.includes("staticPlaylistFetchMissing");
+    return true;
+  });
   if (extracted.length === 0) {
     console.error("Extracted no routes from lib/api — the parser is broken.");
     process.exit(1);
