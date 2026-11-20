@@ -1,3 +1,4 @@
+import { forgetTvRemote } from "@/lib/tv/remote-store";
 import { getMe, login } from "@/lib/api/auth";
 import {
   ApiError,
@@ -385,6 +386,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setSessionExpiredState(false);
     notifyReAuthResult(false);
     await Promise.all([
+      forgetTvRemote(),
       forgetPlayback(),
       SecureStorage.deleteToken(),
       SecureStorage.deleteUser(),
@@ -407,6 +409,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setHasCredentials(false);
     setIsOidcSession(false);
     await Promise.all([
+      forgetTvRemote(),
       AppStorage.deleteServerUrl(),
       AppStorage.deleteOidcSession(),
       forgetPlayback(),

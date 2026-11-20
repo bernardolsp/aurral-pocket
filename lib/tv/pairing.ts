@@ -4,6 +4,7 @@ import { validTvLink, type TvLink } from "./pairing-link";
 import { fromByteArray, toByteArray } from "base64-js";
 import { getRandomValues } from "expo-crypto";
 import nacl from "tweetnacl";
+import { makeRemoteKey } from "./remote-envelope";
 
 const reservedNames = new Set([
   "__proto__",
@@ -85,6 +86,7 @@ export function sealTvSetup(
   serverUrl: string,
   code: string,
   customHeaders: Record<string, string>,
+  remoteKey?: string,
 ) {
   if (
     !validTvLink(link) ||
@@ -95,7 +97,14 @@ export function sealTvSetup(
   const key = toByteArray(link.key + "=");
   const nonce = getRandomValues(new Uint8Array(nacl.box.nonceLength));
   const plaintext = new TextEncoder().encode(
-    JSON.stringify({ v: 1, id: link.id, serverUrl, code, customHeaders }),
+    JSON.stringify({
+      v: 1,
+      id: link.id,
+      serverUrl,
+      code,
+      customHeaders,
+      remoteKey,
+    }),
   );
   const random = getRandomValues(new Uint8Array(nacl.box.secretKeyLength));
   const { publicKey, secretKey } = nacl.box.keyPair.fromSecretKey(random);
@@ -141,7 +150,8 @@ export async function sendTvSetup(
   const { code, expiresAt } = await issueTvPairingCode(signal);
   if (signal.aborted || !Number.isFinite(expiresAt) || expiresAt <= Date.now())
     throw new Error("Pairing code expired");
-  const body = sealTvSetup(link, serverUrl, code, customHeaders);
+  const remoteKey = makeRemoteKey(getRandomValues);
+  const body = sealTvSetup(link, serverUrl, code, customHeaders, remoteKey);
   if (signal.aborted) throw new Error("TV setup cancelled");
   // expo/fetch implements redirect:error and credentials:omit on both platforms.
   // Never use the authenticated Aurral API client for this second destination.
@@ -157,4 +167,5 @@ export async function sendTvSetup(
     },
   );
   if (result.status !== 204) throw new Error("TV did not accept setup");
+  return result.headers?.get("X-Aurral-Remote") === "1" ? remoteKey : null;
 }

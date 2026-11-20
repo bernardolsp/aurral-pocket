@@ -24,12 +24,9 @@ export function usePlaylistPlayback(
 
   // The queue is built at the tap, not held in a memo: each URL carries the
   // session token, which can change while the page stays open.
-  const start = useCallback(
-    async (
-      pickFirst: (items: PlayerTrack[]) => PlayerTrack | undefined,
-      { shuffled = false } = {},
-    ) => {
-      const items = jobs
+  const getTracks = useCallback(
+    () =>
+      jobs
         .map((job) =>
           jobToPlayerTrack(
             job,
@@ -37,7 +34,15 @@ export function usePlaylistPlayback(
             cachedAlbumCover(queryClient, job.albumMbid),
           ),
         )
-        .filter((item): item is PlayerTrack => item !== null);
+        .filter((item): item is PlayerTrack => item !== null),
+    [jobs, collection, queryClient],
+  );
+  const start = useCallback(
+    async (
+      pickFirst: (items: PlayerTrack[]) => PlayerTrack | undefined,
+      { shuffled = false } = {},
+    ) => {
+      const items = getTracks();
       // Starting a track the queue doesn't hold would drop the old queue and
       // then fail. Offline, the queue holds only saved tracks, so the pick
       // comes from those.
@@ -69,7 +74,7 @@ export function usePlaylistPlayback(
         });
       }
     },
-    [jobs, collection, queryClient],
+    [getTracks, collection, queryClient],
   );
 
   const playFrom = useCallback(
@@ -87,6 +92,7 @@ export function usePlaylistPlayback(
 
   return {
     canPlay: jobs.some(isPlayableJob),
+    getTracks,
     playFrom,
     playAll,
     shuffle,

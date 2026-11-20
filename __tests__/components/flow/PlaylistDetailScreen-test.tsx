@@ -344,6 +344,7 @@ describe("PlaylistDetailScreen", () => {
 
   it("shows the playlist's source and how much of it is ready", async () => {
     await open();
+    expect(screen.getByText("Play on TV")).toBeTruthy();
 
     expect(screen.getByText("from Chill")).toBeTruthy();
     expect(screen.getByText("3 tracks · 2 ready")).toBeTruthy();

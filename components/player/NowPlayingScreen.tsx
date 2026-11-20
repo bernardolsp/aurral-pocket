@@ -40,6 +40,7 @@ import {
   useAddToPlaylist,
 } from "@/components/flow/AddToPlaylistSheet";
 import { CoverTintBackdrop } from "@/components/player/CoverTintBackdrop";
+import { TvPlaybackButton } from "@/components/player/TvPlaybackButton";
 import { DevicesButton } from "@/components/player/DevicesButton";
 import { LyricsView } from "@/components/player/LyricsView";
 import { PlayerArtwork } from "@/components/player/PlayerArtwork";
@@ -489,6 +490,10 @@ export function NowPlayingScreen() {
                     <DevicesButton
                       color={colors.text}
                       activeColor={colors.brand}
+                    />
+                    <TvPlaybackButton
+                      source={{ kind: "current", title: track?.title ?? "" }}
+                      color={colors.text}
                     />
                     <View style={styles.toolbarSpacer} />
                     <Pressable

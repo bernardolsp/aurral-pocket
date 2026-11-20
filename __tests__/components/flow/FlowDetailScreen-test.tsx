@@ -1,3 +1,5 @@
+jest.mock("@gorhom/bottom-sheet", () => ({}));
+
 jest.mock("burnt", () => ({ toast: jest.fn() }));
 
 let mockUser: { role: string; permissions: { accessPlaylists: boolean } };
@@ -259,6 +261,7 @@ describe("FlowDetailScreen", () => {
 
   it("shows the flow's schedule and how much of it is ready", async () => {
     await open();
+    expect(screen.getByText("Play on TV")).toBeTruthy();
 
     expect(screen.getByText("Mon · 06:00")).toBeTruthy();
     expect(screen.getByText("3 tracks · 1 ready")).toBeTruthy();

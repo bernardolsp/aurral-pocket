@@ -123,9 +123,13 @@ it("issues a fresh code against Aurral and sends only a fresh authenticated ciph
   (api.post as jest.Mock).mockResolvedValue({
     data: { code, expiresAt: Date.now() + 60_000 },
   });
-  (nativeFetch as jest.Mock).mockResolvedValue({ status: 204 });
+  (nativeFetch as jest.Mock).mockResolvedValue({
+    status: 204,
+    headers: new Headers({ "X-Aurral-Remote": "1" }),
+  });
   const signal = new AbortController().signal;
-  await sendTvSetup(link, server, headers, signal);
+  const remoteKey = await sendTvSetup(link, server, headers, signal);
+  expect(remoteKey).toMatch(/^[a-f0-9]{64}$/);
   expect(api.post).toHaveBeenCalledWith("/auth/pairing-codes", undefined, {
     signal,
   });
@@ -149,6 +153,7 @@ it("issues a fresh code against Aurral and sends only a fresh authenticated ciph
     serverUrl: server,
     code,
     customHeaders: headers,
+    remoteKey,
   });
   expect(openPayload(body, new Uint8Array(32).fill(9))).toBeNull();
   expect(sealTvSetup(link, server, code, headers)).not.toBe(body);

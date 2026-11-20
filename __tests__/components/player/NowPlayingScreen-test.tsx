@@ -1089,6 +1089,7 @@ describe("NowPlayingScreen devices", () => {
     const { getByLabelText } = await renderPlaying();
 
     expect(getByLabelText("Devices")).toBeTruthy();
+    expect(getByLabelText("Play on TV")).toBeTruthy();
   });
 });
 

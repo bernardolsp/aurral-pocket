@@ -6,6 +6,7 @@ import * as Haptics from "expo-haptics";
 import MoreVert from "@expo/material-symbols/more_vert.xml";
 import DeleteIcon from "@expo/material-symbols/delete.xml";
 
+import { TvPlaybackButton } from "@/components/player/TvPlaybackButton";
 import { EmptyState } from "@/components/library/EmptyState";
 import { pluginMenuSection } from "@/components/plugins/PluginMenuActions";
 import { Chip } from "@/components/ui/Chip";
@@ -137,10 +138,8 @@ function PlaylistPage({
     () => ({ ...playlist, kind: "shared" as const }),
     [playlist],
   );
-  const { canPlay, playFrom, playAll, shuffle } = usePlaylistPlayback(
-    collection,
-    jobs,
-  );
+  const { canPlay, getTracks, playFrom, playAll, shuffle } =
+    usePlaylistPlayback(collection, jobs);
 
   const pluginActions = usePluginActions("playlist", {
     playlistId: playlist.id,
@@ -321,6 +320,14 @@ function PlaylistPage({
                   count={missingCount}
                 />
               )}
+              <TvPlaybackButton
+                source={{
+                  kind: "collection",
+                  title: playlist.name,
+                  id: playlist.id,
+                  getTracks,
+                }}
+              />
             </CollectionHero>
             <PlayRow
               title={playlist.name}

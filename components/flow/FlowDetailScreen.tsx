@@ -11,6 +11,7 @@ import Bookmark from "@expo/material-symbols/bookmark.xml";
 import DeleteIcon from "@expo/material-symbols/delete.xml";
 import DownloadIcon from "@expo/material-symbols/download.xml";
 
+import { TvPlaybackButton } from "@/components/player/TvPlaybackButton";
 import { EmptyState } from "@/components/library/EmptyState";
 import { pluginMenuSection } from "@/components/plugins/PluginMenuActions";
 import { CircleButton } from "@/components/ui/CircleButton";
@@ -140,10 +141,8 @@ function FlowPage({
     () => ({ ...flow, kind: "flow" as const }),
     [flow],
   );
-  const { canPlay, playFrom, playAll, shuffle } = usePlaylistPlayback(
-    collection,
-    jobs,
-  );
+  const { canPlay, getTracks, playFrom, playAll, shuffle } =
+    usePlaylistPlayback(collection, jobs);
 
   const startFlow = useStartFlow();
   const deleteFlow = useDeleteFlow();
@@ -404,6 +403,14 @@ function FlowPage({
                   </Text>
                 </View>
               ) : null}
+              <TvPlaybackButton
+                source={{
+                  kind: "collection",
+                  title: flow.name,
+                  id: flow.id,
+                  getTracks,
+                }}
+              />
             </CollectionHero>
             <PlayRow
               title={flow.name}

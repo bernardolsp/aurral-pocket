@@ -14,6 +14,7 @@ import {
   type PendingLink,
   subscribeTvLink,
 } from "@/lib/tv/pairing-link";
+import { rememberTvRemote } from "@/lib/tv/remote-store";
 import { sendTvSetup, tvFingerprint, validTvSettings } from "@/lib/tv/pairing";
 
 export default function TvSetupScreen() {
@@ -37,7 +38,7 @@ export default function TvSetupScreen() {
 function TvSetupContent({ request }: { request: PendingLink | "sent" | null }) {
   const colors = useColors();
   const router = useRouter();
-  const { serverUrl, token, customHeaders } = useAuth();
+  const { serverUrl, token, user, customHeaders } = useAuth();
   const health = useServerHealth();
   const pending = typeof request === "object" ? request : null;
   const sent = request === "sent";
@@ -84,7 +85,20 @@ function TvSetupContent({ request }: { request: PendingLink | "sent" | null }) {
     setSending(true);
     setFailure("");
     try {
-      await sendTvSetup(pending.link, serverUrl, customHeaders, active.signal);
+      const key = await sendTvSetup(
+        pending.link,
+        serverUrl,
+        customHeaders,
+        active.signal,
+      );
+      if (!active.signal.aborted && key && user) {
+        await rememberTvRemote({
+          key,
+          serverUrl,
+          userId: user.id,
+          address: pending.link.address,
+        });
+      }
       if (!active.signal.aborted) {
         clearTvLink(pending, "sent");
       }

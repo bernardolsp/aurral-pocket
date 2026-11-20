@@ -2043,7 +2043,7 @@ const subscribeModesChanged = makeSubscribe(modesChangedListeners);
 const getDisplayedTrack = () => displayedTrack;
 const getPlaybackState = () => playbackState;
 const getProgressSnapshot = () => progressSnapshot;
-const getQueueSnapshot = () => queueSnapshot;
+export const getQueueSnapshot = () => queueSnapshot;
 const getHasQueue = () => hasQueue();
 const getModesSnapshot = () => modesSnapshot;
 
