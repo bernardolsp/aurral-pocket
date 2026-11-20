@@ -169,6 +169,7 @@ const THIRD_PARTY_ROUTES = new Set(["GET /discover/playlists"]);
  */
 const CONTRACT = new Map([
   ["POST /auth/login", null],
+  ["POST /auth/pairing-codes", { code: "string", expiresAt: "number" }],
   ["GET /auth/me", { user: "object", expiresAt: "number?" }],
   [
     "GET /health/bootstrap",
@@ -556,7 +557,7 @@ function checkContractFields(shapes, probed) {
     const shape = shapes.get(key);
     if (shape === undefined) {
       console.error(
-        `\nFAIL: ${key} did not answer 200 with JSON, so the fields the app ` +
+        `\nFAIL: ${key} did not return a successful JSON response, so the fields the app ` +
           "contract guarantees cannot be verified.",
       );
       failed = true;
@@ -995,6 +996,8 @@ async function main() {
   const contractFailed = checkContractVersion(bootstrap);
   const features = bootstrap.body?.api?.features ?? [];
   const extracted = extractPocketRoutes().filter((route) => {
+    if (route.raw === "/auth/pairing-codes")
+      return features.includes("pairing");
     if (route.raw.startsWith("/playlists/builder/"))
       return features.includes("playlistBuilder");
     if (route.raw.endsWith("/fetch-missing"))
@@ -1025,6 +1028,7 @@ async function main() {
   // "<METHOD> <raw path>". Only these routes are shape-checkable: synthetic
   // path parameters make every parameterized route answer 404 on its merits.
   const shapes = new Map();
+  const contractShapes = new Map();
 
   for (const route of routes) {
     const query = REQUIRED_QUERY.get(`${route.method} ${route.raw}`);
@@ -1083,6 +1087,16 @@ async function main() {
     } else {
       if (knownReason) stale.push({ ...route, reason: knownReason });
       ok.push({ ...route, path, status: result.status });
+      // POST routes can also promise response fields, including a 201 pairing code.
+      // Only the field types are retained. Credentials never enter the baseline.
+      if (
+        CONTRACT.get(key) &&
+        result.status >= 200 &&
+        result.status < 300 &&
+        result.body !== undefined
+      ) {
+        contractShapes.set(key, shapeOf(result.body));
+      }
       // Parameterized routes are excluded even when they answer 200: a body
       // produced for a synthetic ID describes a nonexistent record — usually
       // via an external lookup (Lidarr, MusicBrainz, cover art), whose
@@ -1093,7 +1107,7 @@ async function main() {
         result.body !== undefined &&
         !route.raw.includes("${")
       ) {
-        shapes.set(key, shapeOf(result.body));
+        shapes.set(key, contractShapes.get(key) ?? shapeOf(result.body));
       }
     }
   }
@@ -1156,7 +1170,7 @@ async function main() {
     failed = true;
   }
 
-  if (checkContractFields(shapes, probed)) failed = true;
+  if (checkContractFields(contractShapes, probed)) failed = true;
   if (contractFailed) failed = true;
   if (liveFailed) failed = true;
 

@@ -98,6 +98,7 @@ function RootLayoutNav() {
         >
           <Stack.Screen name="(app)" />
         </Stack.Protected>
+        <Stack.Screen name="tv-setup" options={{ presentation: "modal" }} />
       </Stack>
       <StatusBar style={colorScheme === "dark" ? "light" : "dark"} />
     </ThemeProvider>

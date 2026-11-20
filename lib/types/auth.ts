@@ -39,16 +39,16 @@ export type ServerFeature =
   | "playlistBuilderRecommendations"
   | "playlistBuilderExploreFurther"
   | "staticPlaylistFetchMissing"
-  // Reviewed, not adopted: pocket has no Friends, Blends, Community, playlist
-  // collaborator or device pairing screens.
+  | "pairing"
+  // Reviewed, not adopted: pocket has no Friends, Blends, Community or playlist
+  // collaborator screens.
   | "communityPlaylists"
   | "friends"
   | "playlistMembers"
   | "blends"
   | "localPeople"
   | "friendProfiles"
-  | "friendBlends"
-  | "pairing";
+  | "friendBlends";
 
 /** The app contract a server implements, from `GET /health/bootstrap`. */
 export type ApiContract = {

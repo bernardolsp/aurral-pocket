@@ -19,6 +19,16 @@ export function reauth(currentPassword: string) {
     .then((r) => r.data);
 }
 
+export function issueTvPairingCode(signal: AbortSignal) {
+  return api
+    .post<{ code: string; expiresAt: number }>(
+      "/auth/pairing-codes",
+      undefined,
+      { signal },
+    )
+    .then((r) => r.data);
+}
+
 export function logout() {
   return api.post("/auth/logout").then((r) => r.data);
 }

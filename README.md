@@ -44,6 +44,8 @@ Each release targets one Aurral version, pinned in [`.aurral-version`](./.aurral
 - **Shazam:** identify a song playing nearby, then play it or open its album or artists
 - **Sign-in:** password or OIDC, biometric re-auth, and custom headers for reverse proxies such as Cloudflare Access
 
+To set up Aurral TV, sign in to Pocket and connect both devices to the same local network. Scan the TV’s QR code with your phone camera, compare the fingerprints on both screens, then confirm to share a one-time sign-in code and your saved proxy headers.
+
 ## Development
 
 You need Node.js 24 or newer (`.nvmrc` pins it) and npm, Xcode for iOS, and Android Studio with JDK 17 for Android. Docker is only needed for the API contract check and the [test stack](./docs/test-stack/README.md).

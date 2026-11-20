@@ -12,6 +12,7 @@
       "bundleIdentifier": "com.aurral.aurralpocket",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
+        "NSLocalNetworkUsageDescription": "Aurral connects to the TV you choose to send its encrypted sign-in and server settings.",
         "NSAppTransportSecurity": {
           "NSAllowsArbitraryLoads": true
         }
